@@ -1,0 +1,176 @@
+﻿<!doctype html>
+<html>
+<head>
+    <title>Paint!</title>
+</head>
+<body>
+    <style>
+        canvas {
+            touch-action: none; /* Disable panning */
+        }
+    </style>
+    <!--<canvas id="canvas" width="800" height="600" style="border: 2px solid #333"></canvas>-->
+    <div style="position: relative;">
+        <canvas id="layer1" width="800" height="600"
+                style="position: absolute; left: 0; top: 0; z-index: 0; border: 2px solid #333"></canvas>
+        <canvas id="layer2" width="800" height="600"
+                style="position: absolute; left: 0; top: 0; z-index: 1; border: 2px solid #333"></canvas>
+    </div>
+    <div style="position: absolute; left:20px; top: 620px">
+        <button id="negativeButton">Negative</button>
+        <button id="filterButton">Black And White</button>
+    </div>
+    <script type='text/javascript'>
+        var canvases = ['layer1', 'layer2'];
+        var COLORS = ["red", "blue", "green", "yellow", "black", "orange"];
+        var MAX_WIDTH = 10;
+        var canvas1 = document.getElementById(canvases[0]);
+        var canvas2 = document.getElementById(canvases[1]);
+        var context1 = canvas1.getContext("2d");
+        var context2 = canvas2.getContext("2d");
+        var pointers = [];
+        var image = new Image();
+        var isBlackAndWhite = false;
+        var sotoredImageData = undefined;
+
+        context2.lineJoin = "round";
+        context2.lineCap = "round";
+
+        if (window.PointerEvent) {
+            //console.log("is supported");
+            canvas2.addEventListener("pointerdown", startPaint);
+            canvas2.addEventListener("pointermove", paint);
+            canvas2.addEventListener("pointerup", endPaint);
+            canvas2.addEventListener("pointercancel", endPaint);
+        }
+
+        function startPaint(event) {
+            //Set up a running list of points
+            console.log("startPaint");
+            pointers[event.pointerId] = [{ x: event.offsetX, y: event.offsetY }];
+        }
+
+        function endPaint(event) {
+            //console.log("endPaint");
+            delete pointers[event.pointerId];
+        }
+
+        function paint(event) {
+            //console.log("paint + buttons " + event.buttons + " button " + event.button);
+
+            if (event.buttons > 0) {
+                event.preventDefault();
+                //Add newest point
+                pointers[event.pointerId].push({ x: event.offsetX, y: event.offsetY });
+
+                //Create path
+                context2.beginPath();
+                context2.moveTo(pointers[event.pointerId][0].x, pointers[event.pointerId][0].y);
+                context2.lineTo(pointers[event.pointerId][1].x, pointers[event.pointerId][1].y);
+
+                //Stroke path
+                //context.lineWidth = event.pressure * MAX_WIDTH;
+                context2.lineWidth = MAX_WIDTH;
+                context2.strokeStyle = COLORS[event.pointerId % COLORS.length];
+                context2.stroke();
+                context2.closePath();
+
+                //Shift out oldest point
+                pointers[event.pointerId].shift();
+            }
+        }
+
+        function render(src) {
+            image.onload = function () {
+                drawInColor()
+            };
+            image.src = src;
+        }
+
+        function loadImage(src) {
+            //	Prevent any non-image file type from being read.
+            if (!src.type.match(/image.*/)) {
+                console.log("The dropped file is not an image: ", src.type);
+                return;
+            }
+
+            //	Create our FileReader and run the results through the render function.
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                render(e.target.result);
+            };
+            reader.readAsDataURL(src);
+        }
+
+        var target = document.getElementById("layer2");
+        target.addEventListener("dragover", function (e) { e.preventDefault(); }, true);
+        target.addEventListener("drop", function (e) {
+            e.preventDefault();
+            loadImage(e.dataTransfer.files[0]);
+        }, true);
+
+        negativeButton = document.getElementById('negativeButton');
+        negativeButton.onclick = function () {
+            for (var k = 0; k < 2; k++) {
+                var canvas = document.getElementById(canvases[k]);
+                var ctx = canvas.getContext("2d");
+
+                var imagedata = ctx.getImageData(0, 0, canvas.width, canvas.height),
+                    data = imagedata.data;
+
+                for (i = 0; i <= data.length - 4; i += 4) {
+                    data[i] = 255 - data[i]
+                    data[i + 1] = 255 - data[i + 1];
+                    data[i + 2] = 255 - data[i + 2];
+                }
+                ctx.putImageData(imagedata, 0, 0);
+            }
+        };
+
+        var filterButton = document.getElementById('filterButton');
+        filterButton.onclick = function () {
+            if (isBlackAndWhite) {
+                drawInColor();
+                context2.restore();
+            } else {
+                drawInBlackAndWhite();
+            }
+        }
+
+        function drawInColor() {
+            image.width = canvas1.width;
+            image.height = canvas1.height;
+            context1.clearRect(0, 0, canvas1.width, canvas1.height);
+            context1.drawImage(image, 0, 0, image.width, image.height);
+            isBlackAndWhite = false;
+        }
+
+        function drawInBlackAndWhite() {
+            var data = undefined,
+                    i = 0;
+
+            for (var k = 0; k < 2; k++) {
+                var canvas = document.getElementById(canvases[k]);
+                var ctx = canvas.getContext("2d");
+
+                var imagedata = ctx.getImageData(0, 0,
+                                                 canvas.width, canvas.height);
+                if (k == 1) {
+                    context2.save();
+                }
+                var data = imagedata.data;
+
+                for (i = 0; i < data.length - 4; i += 4) {
+                    average = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                    data[i] = average;
+                    data[i + 1] = average;
+                    data[i + 2] = average;
+                }
+                ctx.putImageData(imagedata, 0, 0);
+            }
+
+            isBlackAndWhite = true;
+        }
+    </script>
+</body>
+</html>
